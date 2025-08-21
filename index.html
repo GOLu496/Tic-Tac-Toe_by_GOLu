@@ -1,60 +1,290 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
-    <meta charset="UTF-8">
-    <title>Tic Tac Toe Game | CodingNepal</title>
-    <link rel="stylesheet" href="style.css">
-    <!-- Linking Font Awesome For Icons (X and O) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crazy Snake — Nevla Survival (Stable)</title>
+  <style>
+    :root{ --bg:#0b0f16; --ink:#e6f0ff; --panel:#101828; --accent:#7cff8c; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",sans-serif; overflow:hidden; display:grid; grid-template-rows:auto 1fr auto}
+    header{display:flex; gap:8px; align-items:center; justify-content:center; padding:8px}
+    .btn{cursor:pointer; border:none; border-radius:12px; padding:10px 14px; font-weight:700; background:#c1ffd7; color:#042; box-shadow:0 10px 30px #0006}
+    .btn:active{transform:translateY(1px)}
+    .ghost{background:#d0d8ff; color:#021}
+    .pill{background:#111a2a; padding:6px 10px; border-radius:999px; box-shadow:inset 0 0 0 1px #ffffff14}
+    #wrap{display:grid; place-items:center; padding:6px}
+    canvas{background:radial-gradient(1200px 800px at 50% -20%, #20304a33, transparent), linear-gradient(#0b0f16,#090e17); border-radius:18px; box-shadow:0 20px 60px #000a, inset 0 0 0 1px #ffffff12}
+    footer{padding:6px; text-align:center; opacity:.8; font-size:12px}
+    dialog{border:none; border-radius:16px; width:min(92vw,720px); background:#0e1526; color:var(--ink); padding:14px 16px; box-shadow:0 30px 90px #000c}
+    dialog::backdrop{background:#0009}
+    .rules li{margin:.25rem 0}
+  </style>
 </head>
 <body>
-  <!-- select box -->
-  <div class="select-box">
-    <header>Tic Tac Toe</header>
-    <div class="content">
-      <div class="title">Select which you want to be?</div>
-      <div class="options">
-        <button class="playerX">Player (X)</button>
-        <button class="playerO">Player (O)</button>
-      </div>
-    </div>
-  </div> 
+  <header>
+    <button class="btn" id="startBtn">▶ Start</button>
+    <button class="btn ghost" id="rulesBtn">❔ Rules</button>
+    <div class="pill">Score: <b id="score">0</b></div>
+    <div class="pill">Best: <b id="best">0</b></div>
+    <div class="pill">Speed: <b id="spd">1.00×</b></div>
+  </header>
+  <div id="wrap"><canvas id="game" width="720" height="720"></canvas></div>
+  <footer>🌀 Nevla Survival — stable build.</footer>
 
-  <!-- playboard section -->
-  <div class="play-board">
-    <div class="details">
-      <div class="players">
-        <span class="Xturn">X's Turn</span>
-        <span class="Oturn">O's Turn</span>
-        <div class="slider"></div>
-      </div>
-    </div>
-    <div class="play-area">
-      <section>
-        <span class="box1"></span>
-        <span class="box2"></span>
-        <span class="box3"></span>
-      </section>
-      <section>
-        <span class="box4"></span>
-        <span class="box5"></span>
-        <span class="box6"></span>
-      </section>
-      <section>
-        <span class="box7"></span>
-        <span class="box8"></span>
-        <span class="box9"></span>
-      </section>
-    </div>
-  </div>
+  <dialog id="rules">
+    <h3>Crazy Snake — Rules</h3>
+    <ul class="rules">
+      <li>Move: <b>WASD</b>/<b>Arrow keys</b> · Mobile: <b>Swipe</b>. (Page scroll disabled while playing)</li>
+      <li>Items: 🍏 +1, 🥇 +3, 🌶️ <b>+30% speed 5s</b>, 🧊 <b>-40% speed 5s</b>, ☠️ bad, 🤪 random.</li>
+      <li><b>Score 10</b> ⇒ center पर 🌀 <b>blackhole</b> → 2s बाद 🦦 <b>nevla</b> spawn.</li>
+      <li>🦦 head hit ⇒ <b>Game Over</b>. Body hit ⇒ snake वहीं से <b>break</b>; टूटा हिस्सा field पर <b>dead body</b>.</li>
+      <li>Break के बाद अगर snake ≤ <b>5 blocks</b> ⇒ Game Over. Dead body से टकराए ⇒ Game Over.</li>
+      <li>🦦 good items (🍏 🥇 🌶️) खा सकता है (थोड़ा strong), bad (🧊 ☠️ 🤪) avoid करता है. Speed snake से ~10% ज्यादा; turn पर थोड़ा धीमा।</li>
+    </ul>
+    <div style="display:flex; justify-content:flex-end; gap:8px"><button class="btn" id="closeRules">Close</button></div>
+  </dialog>
 
-  <!-- result box -->
-  <div class="result-box">
-    <div class="won-text"></div>
-    <div class="btn"><button>Replay</button></div>
-  </div>
+<script>
+(()=>{
+  // === Canvas & DPR fit (fixes half‑board issues) ===
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  function fit(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const size = Math.min(Math.floor(window.innerWidth*0.96), Math.floor(window.innerHeight*0.84));
+    const css = Math.max(360, Math.min(900, size));
+    cvs.style.width = css+'px'; cvs.style.height = css+'px';
+    cvs.width = Math.floor(css*dpr); cvs.height = Math.floor(css*dpr);
+  }
+  window.addEventListener('resize', fit); fit();
 
-  <script src="script.js"></script>
+  // UI
+  const ui = {score:document.getElementById('score'), best:document.getElementById('best'), spd:document.getElementById('spd')};
+  const startBtn = document.getElementById('startBtn');
+  const rulesBtn = document.getElementById('rulesBtn');
+  const rulesDlg = document.getElementById('rules');
+  document.getElementById('closeRules').onclick = ()=> rulesDlg.close();
+  rulesBtn.onclick = ()=> rulesDlg.showModal();
 
+  // Prevent page scroll while swiping
+  document.addEventListener('touchmove', e=>{ e.preventDefault(); }, {passive:false});
+
+  // === Game constants ===
+  const GRID = 24;                 // 24x24
+  const CELL = ()=> Math.floor(cvs.width/GRID);
+  const BASE_STEP = 140;           // ms per step (base snake speed)
+  const CHILI_MULT = 1.30;         // +30%
+  const ICE_MULT = 0.60;           // -40%
+  const EFFECT_MS = 5000;          // 5s
+
+  const ITEMS = [
+    {kind:'apple', emoji:'🍏', good:true},
+    {kind:'gold',  emoji:'🥇', good:true},
+    {kind:'chili', emoji:'🌶️', good:true},
+    {kind:'ice',   emoji:'🧊', good:false},
+    {kind:'myst',  emoji:'🤪', good:false},
+    {kind:'poison',emoji:'☠️', good:false},
+  ];
+
+  const wrap=(v,max)=>(v+max)%max; const eq=(a,b)=>a.x===b.x&&a.y===b.y; const ri=n=>Math.floor(Math.random()*n);
+
+  let S; // state
+
+  function emptyCell(blocked){
+    let tries=0; while(tries++<4000){
+      const p={x:ri(GRID), y:ri(GRID)}; if(!blocked.some(c=>eq(c,p))) return p;
+    } return {x:1,y:1};
+  }
+
+  function spawnItem(){
+    const avoid=[...S.snake, ...S.deadBody]; if(S.nevla) avoid.push({x:S.nevla.x,y:S.nevla.y}); if(S.blackhole) avoid.push({x:S.blackhole.x,y:S.blackhole.y});
+    const pos=emptyCell(avoid);
+    const r=Math.random(); let def;
+    if(r<0.55) def=ITEMS[0]; else if(r<0.72) def=ITEMS[1]; else if(r<0.84) def=ITEMS[2]; else if(r<0.93) def=ITEMS[3]; else if(r<0.98) def=ITEMS[4]; else def=ITEMS[5];
+    S.items.push({x:pos.x,y:pos.y,...def});
+  }
+
+  function reset(){
+    const best=+localStorage.getItem('nevlaBest')||0;
+    S={
+      snake:[{x:8,y:12},{x:7,y:12},{x:6,y:12},{x:5,y:12},{x:4,y:12},{x:3,y:12},{x:2,y:12}],
+      dir:{x:1,y:0}, nextDir:{x:1,y:0},
+      items:[], score:0, best,
+      blackhole:null, nevla:null, nevlaArmed:false,
+      deadBody:[],
+      // speed model
+      baseStep:BASE_STEP, speedMult:1.0, // effective step = baseStep/(speedMult)
+      chiliTimer:0, iceTimer:0,
+      paused:false, over:false
+    };
+    ui.score.textContent=S.score; ui.best.textContent=S.best; ui.spd.textContent=S.speedMult.toFixed(2)+'×';
+    for(let i=0;i<4;i++) spawnItem();
+  }
+
+  function start(){ reset(); rafStart(); }
+  startBtn.onclick=start;
+
+  // Input
+  function setDir(x,y){ const c=S.dir; if(c.x+x===0 && c.y+y===0) return; S.nextDir={x,y}; }
+  window.addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    if(k==='arrowup'||k==='w') setDir(0,-1);
+    else if(k==='arrowdown'||k==='s') setDir(0,1);
+    else if(k==='arrowleft'||k==='a') setDir(-1,0);
+    else if(k==='arrowright'||k==='d') setDir(1,0);
+    else if(k==='p') S.paused=!S.paused;
+    else if(k==='r') start();
+  });
+  let ts=null; cvs.addEventListener('touchstart',e=>{const t=e.touches[0]; ts={x:t.clientX,y:t.clientY};},{passive:true});
+  cvs.addEventListener('touchend',e=>{ if(!ts) return; const t=e.changedTouches[0]; const dx=t.clientX-ts.x, dy=t.clientY-ts.y; if(Math.hypot(dx,dy)<12) return; if(Math.abs(dx)>Math.abs(dy)) setDir(dx>0?1:-1,0); else setDir(0,dy>0?1:-1); ts=null; });
+
+  // Loop
+  let last=performance.now(), acc=0;
+  function raf(now){ const dt=now-last; last=now; if(!S.paused && !S.over) acc+=dt; const stepMS=S.baseStep/Math.max(0.4, S.speedMult); while(acc>=stepMS){ step(); acc-=stepMS; } draw(); requestAnimationFrame(raf); }
+  function rafStart(){ last=performance.now(); acc=0; requestAnimationFrame(raf); }
+
+  function step(){
+    // Apply pending dir
+    S.dir=S.nextDir;
+
+    // Timers for effects
+    if(S.chiliTimer>0){ S.chiliTimer-=S.baseStep; if(S.chiliTimer<=0) S.speedMult/=CHILI_MULT; }
+    if(S.iceTimer>0){ S.iceTimer-=S.baseStep; if(S.iceTimer<=0) S.speedMult/=ICE_MULT; }
+    ui.spd.textContent=S.speedMult.toFixed(2)+'×';
+
+    // Move snake
+    const head={x:wrap(S.snake[0].x+S.dir.x,GRID), y:wrap(S.snake[0].y+S.dir.y,GRID)};
+    // dead body collision
+    if(S.deadBody.some(c=>eq(c,head))) return end('You touched your dead body!');
+    // self collision
+    if(S.snake.some((c,i)=>i>0 && eq(c,head))) return end('You crashed into yourself!');
+
+    S.snake.unshift(head);
+
+    // Item pickup
+    let grew=false;
+    for(let i=0;i<S.items.length;i++){
+      const it=S.items[i]; if(eq(it,head)){
+        onSnakeItem(it); S.items.splice(i,1); spawnItem(); grew=true; break;
+      }
+    }
+    if(!grew) S.snake.pop();
+
+    // Blackhole trigger & nevla spawn
+    if(S.score>=10 && !S.nevla && !S.blackhole && !S.nevlaArmed){
+      S.nevlaArmed=true; S.blackhole={x:Math.floor(GRID/2), y:Math.floor(GRID/2)};
+      setTimeout(()=>{ S.nevla={x:S.blackhole.x,y:S.blackhole.y,last:{x:1,y:0}, speedMul:1.10, turnSlow:0.20, extra:0, len:2}; S.blackhole=null; }, 2000);
+    }
+
+    // Nevla actions
+    if(S.nevla){ moveNevla();
+      // Head bite
+      if(eq(S.nevla,S.snake[0])) return end('Nevla bit your head!');
+      // Body hit -> break
+      const idx=S.snake.findIndex((c,i)=>i>0 && eq(c,S.nevla));
+      if(idx>0){
+        const broken=S.snake.splice(idx); // includes the hit cell as first of broken
+        const drop=broken.filter(c=> !(c.x===S.nevla.x && c.y===S.nevla.y));
+        S.deadBody.push(...drop);
+        if(S.snake.length<=5) return end('Too short after attack!');
+      }
+    }
+  }
+
+  function onSnakeItem(it){
+    switch(it.kind){
+      case 'apple': S.score+=1; break;
+      case 'gold': S.score+=3; break;
+      case 'chili':
+        // Remove previous chili multiplier before stacking
+        if(S.chiliTimer>0){ S.chiliTimer=0; S.speedMult/=CHILI_MULT; }
+        S.speedMult*=CHILI_MULT; S.chiliTimer=EFFECT_MS; break;
+      case 'ice':
+        if(S.iceTimer>0){ S.iceTimer=0; S.speedMult/=ICE_MULT; }
+        S.speedMult*=ICE_MULT; S.iceTimer=EFFECT_MS; break;
+      case 'myst':
+        if(Math.random()<0.5){ S.score+=4; } else { // small curse -> reverse controls 3s
+          const old = S.nextDir; const rev={x:-old.x,y:-old.y}; S.nextDir=rev; setTimeout(()=>{},3000);
+        }
+        break;
+      case 'poison':
+        if(S.snake.length>6) S.snake.pop(); else end('Poisoned and too short!');
+        break;
+    }
+    ui.score.textContent=S.score; if(S.score>S.best){ S.best=S.score; ui.best.textContent=S.best; localStorage.setItem('nevlaBest',S.best); }
+  }
+
+  // === Nevla AI (grid heuristic + item avoidance) ===
+  function cellCost(x,y){
+    const it=S.items.find(i=>i.x===x && i.y===y); if(!it) return 1;
+    if(it.good) return 0.65; // slightly attractive
+    return 4.0;              // avoid bad
+  }
+  function torusDist(ax,ay,bx,by){
+    const dx=Math.min(Math.abs(ax-bx), GRID-Math.abs(ax-bx));
+    const dy=Math.min(Math.abs(ay-by), GRID-Math.abs(ay-by));
+    return dx+dy;
+  }
+  function moveNevla(){
+    const n=S.nevla; if(!n) return;
+    // moves per snake step (speed advantage)
+    let moves=1; n.extra+=n.speedMul-1; if(n.extra>=1){ moves++; n.extra-=1; }
+    while(moves--){
+      const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+      let best=null, score=Infinity;
+      for(const d of dirs){
+        const nx=wrap(n.x+d.x,GRID), ny=wrap(n.y+d.y,GRID);
+        let s = torusDist(nx,ny,S.snake[0].x,S.snake[0].y) + cellCost(nx,ny);
+        if(n.last && d.x===n.last.x && d.y===n.last.y) s-=0.12; // prefer straight
+        if(s<score){ score=s; best={x:nx,y:ny,dir:d}; }
+      }
+      if(best){
+        const turned = !n.last || best.dir.x!==n.last.x || best.dir.y!==n.last.y;
+        if(turned){ n.extra=Math.max(0, n.extra - n.turnSlow); }
+        n.x=best.x; n.y=best.y; n.last=best.dir;
+        // eat good item
+        const i=S.items.findIndex(it=>it.x===n.x && it.y===n.y);
+        if(i>-1){ const it=S.items[i]; if(it.good){ n.len++; if(it.kind==='chili') n.speedMul=Math.min(1.5, n.speedMul+0.05); S.items.splice(i,1); spawnItem(); } }
+      }
+    }
+  }
+
+  // === Draw ===
+  function draw(){
+    const cell=CELL();
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    // grid
+    ctx.save(); ctx.globalAlpha=0.08; ctx.strokeStyle="#c8d1ff";
+    for(let i=0;i<=GRID;i++){ ctx.beginPath(); ctx.moveTo(i*cell,0); ctx.lineTo(i*cell,cvs.height); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(cvs.width,i*cell); ctx.stroke(); }
+    ctx.restore();
+
+    // dead body (tomb emoji)
+    ctx.font=Math.floor(cell*0.8)+"px Apple Color Emoji, Noto Color Emoji, Segoe UI Emoji"; ctx.textBaseline='top';
+    for(const c of S.deadBody){ ctx.globalAlpha=0.95; ctx.fillText('🪦', c.x*cell+cell*0.08, c.y*cell+cell*0.02); }
+    ctx.globalAlpha=1;
+
+    // items
+    ctx.font=Math.floor(cell*0.85)+"px Apple Color Emoji, Noto Color Emoji, Segoe UI Emoji";
+    for(const it of S.items){ ctx.fillText(it.emoji, it.x*cell+cell*0.1, it.y*cell+cell*0.05); }
+
+    // blackhole
+    if(S.blackhole){ const bx=S.blackhole.x*cell+cell/4, by=S.blackhole.y*cell+cell/4; ctx.save(); ctx.translate(bx,by); ctx.rotate((performance.now()/500)%(Math.PI*4)); ctx.font=Math.floor(cell*4)+"px Apple Color Emoji, Noto Color Emoji, Segoe UI Emoji"; ctx.fillText('🌀', -cell*2, -cell*2); ctx.restore(); }
+
+    // nevla
+    if(S.nevla){ ctx.font=Math.floor(cell*0.9)+"px Apple Color Emoji, Noto Color Emoji, Segoe UI Emoji"; ctx.fillText('🦦', S.nevla.x*cell+cell*0.05, S.nevla.y*cell+0.02*cell); }
+
+    // snake
+    for(let i=S.snake.length-1;i>=0;i--){ const s=S.snake[i]; const x=s.x*cell+1, y=s.y*cell+1, w=cell-2, h=cell-2, r=Math.max(4,cell*0.18); const g=ctx.createLinearGradient(x,y,x+w,y+h); g.addColorStop(0,'#7cff8c'); g.addColorStop(1,'#49eaff'); ctx.fillStyle=g; roundRect(ctx,x,y,w,h,r); ctx.fill(); if(i===0){ ctx.fillStyle='#021826'; const ex=x+(S.dir.x===1?w-6:S.dir.x===-1?6:w/2), ey1=y+8, ey2=y+h-8; ctx.fillRect(ex-2,ey1-2,4,4); ctx.fillRect(ex-2,ey2-2,4,4);} }
+  }
+  function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  function end(msg){
+    S.over=true; S.paused=true; if(S.score>S.best){ S.best=S.score; localStorage.setItem('nevlaBest',S.best); ui.best.textContent=S.best; }
+    setTimeout(()=>alert('Game Over! '+msg+'\nScore: '+S.score),10);
+  }
+})();
+</script>
 </body>
 </html>
